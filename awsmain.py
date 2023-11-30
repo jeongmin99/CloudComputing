@@ -1,13 +1,17 @@
 import boto3
+from botocore.exceptions import WaiterError
 
 access_key=""
 secret_key =""
 global ec2
 global resource
+global ssm
 def init_aws():
     global ec2
     global resource
+    global ssm
     ec2 = boto3.client('ec2',aws_access_key_id=access_key,aws_secret_access_key=secret_key,region_name="ap-northeast-2")
+    ssm = boto3.client('ssm',aws_access_key_id=access_key,aws_secret_access_key=secret_key,region_name="ap-northeast-2")
     resource = boto3.resource('ec2',aws_access_key_id=access_key,aws_secret_access_key=secret_key,region_name="ap-northeast-2")
 
 def listInstances():
@@ -62,7 +66,7 @@ def createInstance(id):
      
      done= False
      while done==False:
-        res=resource.create_instances(ImageId=id,InstanceType='t2.micro',MaxCount=1,MinCount=1)
+        res=resource.create_instances(ImageId=id,InstanceType='t2.micro',MaxCount=1,MinCount=1,SecurityGroupIds=['sg-038024dd64c7f9fa5'])
         print("Successfully started EC2 instance %s based on AMI %s" % (res[0].instance_id,id))
         done=True
 
@@ -78,12 +82,26 @@ def listImages():
     print("Listing images ....")
     done = False
     while done==False:
-        res=ec2.describe_images(Filters=[{'Name':'name','Values':['zpa-connector-2023.08-c9c7dfab-017a-40c4-993c-12119713470a']}])
+        res=ec2.describe_images(Filters=[{'Name':'name','Values':['htcondor-slave-image']}])
         list=res['Images']
         for image in list:
             print("[ImageID] %s, [Name] %s, [Owner] %s" % (image['ImageId'],image['Name'],image['OwnerId']))
 
         done=True
+
+def condor_status():
+    res=ssm.send_command(InstanceIds=['i-0fa386b594da20771'],DocumentName='AWS-RunShellScript',Parameters={'commands': ['condor_status']})
+    command_id = res['Command']['CommandId']
+    waiter = ssm.get_waiter("command_executed")
+    try:
+        waiter.wait(
+        CommandId=command_id,
+        InstanceId='i-0fa386b594da20771',
+        )
+    except WaiterError as ex:
+        logging.error(ex)
+        return
+    print(ssm.get_command_invocation(CommandId=command_id, InstanceId='i-0fa386b594da20771')['StandardOutputContent']) 
 
 if __name__ == "__main__":
     init_aws()
@@ -95,7 +113,7 @@ if __name__ == "__main__":
         print("  3. start instance               4. available regions      ")
         print("  5. stop instance                6. create instance        ")
         print("  7. reboot instance              8. list images            ")
-        print("                                 99. quit                   ")
+        print("  9. condor_status               99. quit                   ")
         print("------------------------------------------------------------")
 
         print("Enter an integer: ",end="")
@@ -132,6 +150,9 @@ if __name__ == "__main__":
         
         elif num == 8:
             listImages()
+
+        elif num == 9:
+            condor_status()
         
         elif num == 99:
             print("bye!")
