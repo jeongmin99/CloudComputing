@@ -135,6 +135,27 @@ def condor_status():
     #커맨드 실행 결과 출력
     print(ssm.get_command_invocation(CommandId=command_id, InstanceId='i-0fa386b594da20771')['StandardOutputContent']) 
 
+#condor_q 상태 확인
+def condor_q(): 
+    #ssm module로 통신
+    res=ssm.send_command(InstanceIds=['i-0fa386b594da20771'],DocumentName='AWS-RunShellScript',Parameters={'commands': ['condor_q']})
+    command_id = res['Command']['CommandId']
+
+    #커맨드 실행 결과 받을때 까지 대기
+    waiter = ssm.get_waiter("command_executed")
+    try:
+        waiter.wait(
+        CommandId=command_id,
+        InstanceId='i-0fa386b594da20771',
+        )
+    except WaiterError as ex:
+        logging.error(ex)
+        return
+
+    #커맨드 실행 결과 출력
+    print(ssm.get_command_invocation(CommandId=command_id, InstanceId='i-0fa386b594da20771')['StandardOutputContent']) 
+
+
 #오토스케일링 모듈(multithreading)
 def autoscaling():
     while True:
@@ -243,7 +264,7 @@ if __name__ == "__main__":
         print("  5. stop instance                6. create instance        ")
         print("  7. reboot instance              8. list images            ")
         print("  9. condor_status               10. scaling                ")
-        print(" 99. exit                                                   ")
+        print("  11. condor_q                   99. exit                   ")
         print("------------------------------------------------------------")
 
         print("Enter an integer: ",end="")
@@ -286,6 +307,9 @@ if __name__ == "__main__":
         
         elif num == 10:
             scaling()
+        
+        elif num == 11:
+            condor_q()
 
         elif num == 99:
             print("bye!")
